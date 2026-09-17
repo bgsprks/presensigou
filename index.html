@@ -617,8 +617,8 @@
                 ctx.font = '12px Inter, sans-serif';
                 ctx.fillStyle = '#4B5563';
                 ctx.fillText(`ID: ${p.id}`, 150, 292);
-                ctx.fillText(`Prodi: ${p.prodi}`, 150, 312);
-                ctx.fillText(`Kelas: ${p.kelas}`, 150, 332);
+                ctx.fillText(p.prodi, 150, 312);
+                // ctx.fillText(`Kelas: ${p.kelas}`, 150, 332);
 
                 const dataUrl = canvas.toDataURL('image/png');
                 const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
