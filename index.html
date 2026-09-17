@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Web Absensi QR Code</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1E40AF', // Biru
+                        secondary: '#BE185D', // Dark Pink (Merah Muda Tua)
+                        warning: '#F59E0B', // Kuning (Highlight)
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Inter & Font Awesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Library JS Utama -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex flex-col min-h-screen pb-20 md:pb-0">
+
+    <!-- Header / Navbar Utama -->
+    <header class="bg-primary text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-warning text-gray-900 p-2 rounded-lg font-bold">
+                    <i class="fa-solid fa-qrcode text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Absensi QR</h1>
+                    <p class="text-xs text-blue-200">Sistem Kehadiran Terintegrasi</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="openConfigModal()" class="bg-blue-800 hover:bg-blue-900 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-1">
+                    <i class="fa-solid fa-gear"></i>
+                    <span class="hidden sm:inline">URL GAS</span>
+                </button>
+                <button onclick="syncDataFromCloud()" id="syncBtn" class="bg-warning hover:bg-amber-600 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow">
+                    <i class="fa-solid fa-rotate" id="syncIcon"></i>
+                    <span>Sinkron</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Modal Konfigurasi URL Google Apps Script -->
+    <div id="configModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-lg font-bold text-primary mb-2"><i class="fa-solid fa-link mr-2"></i>Konfigurasi Backend GAS</h3>
+            <p class="text-xs text-gray-500 mb-4">Masukkan Web App URL Google Apps Script Anda agar aplikasi dapat terhubung ke Google Sheets.</p>
+            <input type="text" id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm mb-4 focus:ring-2 focus:ring-primary focus:outline-none">
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeConfigModal()" class="px-4 py-2 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg">Batal</button>
+                <button onclick="saveGasUrl()" class="px-4 py-2 bg-secondary text-white text-xs font-semibold rounded-lg">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto w-full flex-grow flex flex-col md:flex-row px-4 py-6 gap-6">
+        
+        <!-- Sidebar Navigation (Desktop) / Bottom Navigation (Mobile) -->
+        <aside class="w-full md:w-64 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-row md:flex-col justify-around md:justify-start space-y-0 md:space-y-2 shrink-0 fixed md:static bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t md:border">
+            <button onclick="switchTab('scan')" class="nav-btn flex flex-col md:flex-row items-center md:space-x-3 p-2.5 md:px-4 md:py-3 rounded-xl text-xs md:text-sm font-medium transition active-nav text-primary bg-blue-50" data-target="scan">
+                <i class="fa-solid fa-camera text-base md:text-lg"></i>
+                <span class="mt-1 md:mt-0">Scan QR</span>
+            </button>
+            <button onclick="switchTab('peserta')" class="nav-btn flex flex-col md:flex-row items-center md:space-x-3 p-2.5 md:px-4 md:py-3 rounded-xl text-xs md:text-sm font-medium transition text-gray-600 hover:bg-gray-50" data-target="peserta">
+                <i class="fa-solid fa-users text-base md:text-lg"></i>
+                <span class="mt-1 md:mt-0">Data Peserta</span>
+            </button>
+            <button onclick="switchTab('status')" class="nav-btn flex flex-col md:flex-row items-center md:space-x-3 p-2.5 md:px-4 md:py-3 rounded-xl text-xs md:text-sm font-medium transition text-gray-600 hover:bg-gray-50" data-target="status">
+                <i class="fa-solid fa-clipboard-user text-base md:text-lg"></i>
+                <span class="mt-1 md:mt-0">Status Kehadiran</span>
+            </button>
+            <button onclick="switchTab('statistik')" class="nav-btn flex flex-col md:flex-row items-center md:space-x-3 p-2.5 md:px-4 md:py-3 rounded-xl text-xs md:text-sm font-medium transition text-gray-600 hover:bg-gray-50" data-target="statistik">
+                <i class="fa-solid fa-chart-pie text-base md:text-lg"></i>
+                <span class="mt-1 md:mt-0">Statistik</span>
+            </button>
+            <button onclick="switchTab('rekap')" class="nav-btn flex flex-col md:flex-row items-center md:space-x-3 p-2.5 md:px-4 md:py-3 rounded-xl text-xs md:text-sm font-medium transition text-gray-600 hover:bg-gray-50" data-target="rekap">
+                <i class="fa-solid fa-file-excel text-base md:text-lg"></i>
+                <span class="mt-1 md:mt-0">Rekap Absen</span>
+            </button>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-grow bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 mb-16 md:mb-0">
+            
+            <section id="tab-scan" class="tab-content space-y-6">
+                <div>
+                    <h2 class="text-xl font-bold text-primary flex items-center">
+                        <i class="fa-solid fa-camera mr-2"></i> Pemindai QR Absensi
+                    </h2>
+                    <p class="text-xs text-gray-500 mt-1">Arahkan kamera ke QR Code peserta untuk mencatat kehadiran secara otomatis.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <div class="bg-gray-900 rounded-2xl overflow-hidden shadow-inner flex flex-col items-center justify-center p-4 relative min-h-[300px]">
+                        <div id="reader" class="w-full rounded-xl overflow-hidden"></div>
+                        <div id="scan-placeholder" class="text-center text-gray-400 py-12">
+                            <i class="fa-solid fa-camera-slash text-4xl mb-2"></i>
+                            <p class="text-xs">Kamera belum aktif</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="flex space-x-2">
+                            <button onclick="startScanner()" class="flex-1 bg-secondary hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-play"></i>
+                                <span>Mulai Scan</span>
+                            </button>
+                            <button onclick="stopScanner()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-xl text-sm transition flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-stop"></i>
+                                <span>Matikan Scan</span>
+                            </button>
+                        </div>
+
+                        <div id="scanResultCard" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-4 transition-all">
+                            <h3 class="font-bold text-primary text-sm mb-2 flex items-center">
+                                <i class="fa-solid fa-circle-check text-green-600 mr-2"></i> Hasil Pemindaian Terakhir
+                            </h3>
+                            <div class="space-y-1 text-xs text-gray-700">
+                                <p><strong>ID:</strong> <span id="resId">-</span></p>
+                                <p><strong>Nama:</strong> <span id="resNama">-</span></p>
+                                <p><strong>Prodi / Fak:</strong> <span id="resProdi">-</span></p>
+                                <p><strong>Waktu:</strong> <span id="resWaktu">-</span></p>
+                            </div>
+                        </div>
+
+                        <div class="bg-amber-50 border border-warning/30 rounded-2xl p-4">
+                            <h4 class="font-bold text-amber-800 text-xs uppercase tracking-wider mb-1">Informasi</h4>
+                            <p class="text-xs text-amber-700">Pastikan perangkat tersinkronisasi dengan Google Sheets agar data peserta dan status absen selalu terbarukan.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-peserta" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-primary flex items-center">
+                            <i class="fa-solid fa-users mr-2"></i> Manajemen Data Peserta
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">Upload data Excel lokal atau kelola QR Code peserta.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <label class="bg-warning hover:bg-amber-600 text-gray-900 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-bezier cursor-pointer shadow flex items-center space-x-2">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Upload Excel</span>
+                            <input type="file" id="excelUpload" accept=".xlsx, .xls" class="hidden" onchange="handleExcelUpload(event)">
+                        </label>
+                        <button onclick="downloadBatchQR()" class="bg-secondary hover:bg-pink-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow flex items-center space-x-2">
+                            <i class="fa-solid fa-file-zipper"></i>
+                            <span>Download Batch QR (.zip)</span>
+                        </button>
+                        <button onclick="resetDatabaseConfirm()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow flex items-center space-x-2">
+                            <i class="fa-solid fa-trash"></i>
+                            <span>Reset Database</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 uppercase font-bold tracking-wider border-b">
+                                <th class="p-3">ID</th>
+                                <th class="p-3">Nama</th>
+                                <th class="p-3">Prodi / Fakultas</th>
+                                <th class="p-3">Kelas</th>
+                                <th class="p-3 text-center">Status</th>
+                                <th class="p-3 text-center">Aksi QR</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pesertaTableBody" class="divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="6" class="p-6 text-center text-gray-400">Belum ada data peserta. Silakan upload file Excel atau sinkronkan.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tab-status" class="tab-content hidden space-y-6">
+                <div>
+                    <h2 class="text-xl font-bold text-primary flex items-center">
+                        <i class="fa-solid fa-clipboard-user mr-2"></i> Status Kehadiran Peserta
+                    </h2>
+                    <p class="text-xs text-gray-500 mt-1">Filter dan pantau kehadiran berdasarkan Fakultas, Kelompok, dan Kelas.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Filter Fakultas</label>
+                        <select id="filterFakultas" onchange="filterStatusTable()" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-primary focus:outline-none">
+                            <option value="">Semua Fakultas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Filter Kelompok</label>
+                        <select id="filterKelompok" onchange="filterStatusTable()" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-primary focus:outline-none">
+                            <option value="">Semua Kelompok</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Filter Kelas</label>
+                        <select id="filterKelas" onchange="filterStatusTable()" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-primary focus:outline-none">
+                            <option value="">Semua Kelas</option>
+                            <option value="Reguler Pagi">Reguler Pagi</option>
+                            <option value="Reguler Sore">Reguler Sore</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Filter Status</label>
+                        <select id="filterStatus" onchange="filterStatusTable()" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-primary focus:outline-none">
+                            <option value="">Semua Status</option>
+                            <option value="Hadir">Hadir</option>
+                            <option value="Belum">Belum</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 uppercase font-bold tracking-wider border-b">
+                                <th class="p-3">ID</th>
+                                <th class="p-3">Nama</th>
+                                <th class="p-3">Fakultas / Prodi</th>
+                                <th class="p-3">Kelompok</th>
+                                <th class="p-3">Kelas</th>
+                                <th class="p-3 text-center">Status Absen</th>
+                                <th class="p-3">Waktu Absen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statusTableBody" class="divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="7" class="p-6 text-center text-gray-400">Tidak ada data.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tab-statistik" class="tab-content hidden space-y-6">
+                <div>
+                    <h2 class="text-xl font-bold text-primary flex items-center">
+                        <i class="fa-solid fa-chart-pie mr-2"></i> Statistik Kehadiran
+                    </h2>
+                    <p class="text-xs text-gray-500 mt-1">Ringkasan statistik kehadiran peserta dikelompokkan berdasarkan Kelompok.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-blue-50 border border-blue-200 p-4 rounded-2xl shadow-sm">
+                        <p class="text-xs font-bold text-primary uppercase">Total Peserta</p>
+                        <h3 id="statTotal" class="text-2xl font-bold text-gray-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-green-50 border border-green-200 p-4 rounded-2xl shadow-sm">
+                        <p class="text-xs font-bold text-green-700 uppercase">Hadir</p>
+                        <h3 id="statHadir" class="text-2xl font-bold text-green-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm">
+                        <p class="text-xs font-bold text-amber-700 uppercase">Belum Hadir</p>
+                        <h3 id="statBelum" class="text-2xl font-bold text-amber-900 mt-1">0</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-200 p-4 rounded-2xl shadow-sm flex flex-col items-center justify-center">
+                    <h3 class="font-bold text-primary text-sm mb-4">Grafik Kehadiran per Kelompok</h3>
+                    <div class="w-full max-w-xl h-80">
+                        <canvas id="statChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-rekap" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-primary flex items-center">
+                            <i class="fa-solid fa-file-excel mr-2"></i> Rekap Absensi Akhir
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">Rekapitulasi otomatis diurutkan berdasarkan ID Peserta.</p>
+                    </div>
+                    <button onclick="downloadExcelRekap()" class="bg-secondary hover:bg-pink-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow flex items-center space-x-2">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Download Rekap Excel (.xlsx)</span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 uppercase font-bold tracking-wider border-b">
+                                <th class="p-3">ID</th>
+                                <th class="p-3">Nama Peserta</th>
+                                <th class="p-3">Prodi</th>
+                                <th class="p-3">Fakultas</th>
+                                <th class="p-3">Kelompok</th>
+                                <th class="p-3">Kelas</th>
+                                <th class="p-3 text-center">Status</th>
+                                <th class="p-3">Waktu Absen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rekapTableBody" class="divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="8" class="p-6 text-center text-gray-400">Tidak ada data rekap.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Modal Lihat QR Single -->
+    <div id="qrModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl relative">
+            <h3 id="modalQrTitle" class="font-bold text-primary text-sm mb-1">Detail QR Code</h3>
+            <p id="modalQrSub" class="text-xs text-gray-500 mb-4">-</p>
+            <div id="modalQrContainer" class="flex justify-center p-4 bg-gray-50 rounded-xl mb-4 border border-gray-200"></div>
+            <button onclick="closeQrModal()" class="w-full py-2 bg-primary text-white text-xs font-bold rounded-xl">Tutup</button>
+        </div>
+    </div>
+
+    <script>
+        // State Manajemen Lokal
+        let statePeserta = JSON.parse(localStorage.getItem('app_peserta')) || [];
+        let html5QrCode = null;
+        let isScanning = false;
+        let myChart = null;
+
+        // Ambil URL GAS dari localStorage
+        let gasUrl = localStorage.getItem('app_gas_url') || '';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (gasUrl) {
+                document.getElementById('gasUrlInput').value = gasUrl;
+            }
+            renderAllViews();
+        });
+
+        // Pengaturan Modal URL
+        function openConfigModal() {
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.add('hidden');
+        }
+        function saveGasUrl() {
+            const val = document.getElementById('gasUrlInput').value.trim();
+            if (!val) {
+                alert('URL tidak boleh kosong!');
+                return;
+            }
+            gasUrl = val;
+            localStorage.setItem('app_gas_url', gasUrl);
+            closeConfigModal();
+            alert('URL Backend GAS berhasil disimpan!');
+        }
+
+        // Navigasi Tab
+        function switchTab(target) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${target}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-primary', 'bg-blue-50');
+                btn.classList.add('text-gray-600', 'hover:bg-gray-50');
+            });
+            const activeBtn = document.querySelector(`[data-target="${target}"]`);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-gray-600', 'hover:bg-gray-50');
+                activeBtn.classList.add('text-primary', 'bg-blue-50');
+            }
+
+            if (target === 'statistik') {
+                renderChart();
+            }
+        }
+
+        // Sinkronisasi dengan Google Sheets via Batch
+        async function syncDataToCloud() {
+            if (!gasUrl) return;
+            try {
+                await fetch(gasUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'batchSync', data: statePeserta })
+                });
+            } catch (err) {
+                console.error("Gagal sinkron otomatis:", err);
+            }
+        }
+
+        async function syncDataFromCloud() {
+            if (!gasUrl) {
+                alert('Silakan atur URL Google Apps Script terlebih dahulu melalui tombol "URL GAS" di pojok kanan atas.');
+                openConfigModal();
+                return;
+            }
+
+            const icon = document.getElementById('syncIcon');
+            icon.classList.add('fa-spin');
+
+            try {
+                const response = await fetch(gasUrl);
+                const result = await response.json();
+                if (result.status === 'success') {
+                    statePeserta = result.data.map(item => ({
+                        id: String(item.id),
+                        nama: item.nama,
+                        prodi: item.prodi,
+                        fakultas: item.fakultas,
+                        kelompok: item.kelompok,
+                        kelas: item.kelas,
+                        status: item.status || 'Belum',
+                        waktu: item.waktu || ''
+                    }));
+                    saveLocalState();
+                    renderAllViews();
+                    alert('Sinkronisasi berhasil! Data diperbarui dari Google Sheets.');
+                } else {
+                    alert('Gagal sinkron: ' + result.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Terjadi kesalahan jaringan saat mengambil data dari Google Sheets.');
+            } finally {
+                icon.classList.remove('fa-spin');
+            }
+        }
+
+        function saveLocalState() {
+            localStorage.setItem('app_peserta', JSON.stringify(statePeserta));
+        }
+
+        function renderAllViews() {
+            renderPesertaTable();
+            renderStatusTable();
+            renderRekapTable();
+            populateFilterOptions();
+        }
+
+        // Upload Excel Lokal
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    statePeserta = json.map(row => ({
+                        id: String(row['ID'] || row['id'] || ''),
+                        nama: String(row['Nama Peserta'] || row['Nama'] || row['nama'] || ''),
+                        prodi: String(row['Prodi'] || row['prodi'] || ''),
+                        fakultas: String(row['Fakultas'] || row['fakultas'] || ''),
+                        kelompok: String(row['Kelompok'] || row['kelompok'] || ''),
+                        kelas: String(row['Kelas'] || row['kelas'] || 'Reguler Pagi'),
+                        status: String(row['Status Absen'] || row['status'] || 'Belum'),
+                        waktu: String(row['Waktu Absen'] || row['waktu'] || '')
+                    })).filter(item => item.id !== '');
+
+                    saveLocalState();
+                    renderAllViews();
+                    syncDataToCloud();
+                    alert(`Berhasil memuat ${statePeserta.length} data peserta dari Excel!`);
+                } catch (err) {
+                    console.error(err);
+                    alert('Format file Excel tidak valid.');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Render Tabel Peserta
+        function renderPesertaTable() {
+            const tbody = document.getElementById('pesertaTableBody');
+            if (statePeserta.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-gray-400">Belum ada data peserta. Silakan upload file Excel atau sinkronkan.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = statePeserta.map((p, idx) => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3 font-semibold">${p.id}</td>
+                    <td class="p-3">${p.nama}</td>
+                    <td class="p-3">${p.prodi} (${p.fakultas})</td>
+                    <td class="p-3">${p.kelas}</td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-[10px] font-bold ${p.status === 'Hadir' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}">${p.status}</span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <button onclick="showQrModal('${p.id}', '${p.nama}', '${p.prodi}')" class="bg-primary hover:bg-blue-800 text-white px-2.5 py-1 rounded-lg text-xs font-semibold">
+                            <i class="fa-solid fa-qrcode mr-1"></i> QR
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Tampilkan Modal QR Single
+        function showQrModal(id, nama, prodi) {
+            document.getElementById('modalQrTitle').innerText = nama;
+            document.getElementById('modalQrSub').innerText = `ID: ${id} | ${prodi}`;
+            const container = document.getElementById('modalQrContainer');
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: id,
+                width: 160,
+                height: 160
+            });
+            document.getElementById('qrModal').classList.remove('hidden');
+        }
+        function closeQrModal() {
+            document.getElementById('qrModal').classList.add('hidden');
+        }
+
+        // Batch Download QR Code (.zip) dengan teks keterangan
+        async function downloadBatchQR() {
+            if (statePeserta.length === 0) {
+                alert('Tidak ada data peserta untuk di-download!');
+                return;
+            }
+
+            const zip = new JSZip();
+            const folder = zip.folder("QR_Codes_Peserta");
+
+            for (let p of statePeserta) {
+                // Buat canvas untuk menggambar QR + Teks Keterangan
+                const canvas = document.createElement('canvas');
+                canvas.width = 300;
+                canvas.height = 360;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Render QR code ke elemen temporary
+                const tempDiv = document.createElement('div');
+                new QRCode(tempDiv, { text: p.id, width: 220, height: 220 });
+                
+                await new Promise(resolve => setTimeout(resolve, 50));
+                const img = tempDiv.querySelector('img') || tempDiv.querySelector('canvas');
+
+                if (img) {
+                    ctx.drawImage(img, 40, 20, 220, 220);
+                }
+
+                // Tambahkan Teks Keterangan di bawah QR
+                ctx.fillStyle = '#111827';
+                ctx.font = 'bold 14px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(p.nama, 150, 270);
+
+                ctx.font = '12px Inter, sans-serif';
+                ctx.fillStyle = '#4B5563';
+                ctx.fillText(`ID: ${p.id}`, 150, 292);
+                ctx.fillText(`Prodi: ${p.prodi}`, 150, 312);
+                ctx.fillText(`Kelas: ${p.kelas}`, 150, 332);
+
+                const dataUrl = canvas.toDataURL('image/png');
+                const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
+                folder.file(`${p.id}_${p.nama.replace(/[^a-zA-Z0-9]/g, '_')}.png`, base64Data, { base64: true });
+            }
+
+            const content = await zip.generateAsync({ type: "blob" });
+            saveAs(content, "Batch_QR_Peserta.zip");
+        }
+
+        // Reset Database
+        async function resetDatabaseConfirm() {
+            if (!confirm('Apakah Anda yakin ingin mengosongkan/mereset seluruh status kehadiran peserta?')) return;
+
+            if (gasUrl) {
+                try {
+                    await fetch(`${gasUrl}?action=reset`);
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            statePeserta.forEach(p => {
+                p.status = 'Belum';
+                p.waktu = '';
+            });
+            saveLocalState();
+            renderAllViews();
+            alert('Database berhasil di-reset.');
+        }
+
+        // Pemindai QR (Scanner)
+        function startScanner() {
+            if (isScanning) return;
+            document.getElementById('scan-placeholder').classList.add('hidden');
+            html5QrCode = new Html5Qrcode("reader");
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                async (decodedText) => {
+                    await handleScannedId(decodedText);
+                },
+                (errorMessage) => {
+                    // Ignore frame scanning errors
+                }
+            ).then(() => {
+                isScanning = true;
+            }).catch(err => {
+                console.error(err);
+                alert('Gagal menyalakan kamera. Pastikan izin kamera diaktifkan.');
+                document.getElementById('scan-placeholder').classList.remove('hidden');
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().then(() => {
+                    isScanning = false;
+                    document.getElementById('scan-placeholder').classList.remove('hidden');
+                }).catch(err => console.error(err));
+            }
+        }
+
+        async function handleScannedId(id) {
+            const peserta = statePeserta.find(p => p.id === String(id));
+            if (!peserta) {
+                alert(`ID QR Code "${id}" tidak ditemukan dalam database!`);
+                return;
+            }
+
+            if (peserta.status === 'Hadir') {
+                alert(`Peserta ${peserta.nama} sudah melakukan absensi sebelumnya!`);
+                return;
+            }
+
+            const waktuSekarang = new Date().toLocaleString();
+            peserta.status = 'Hadir';
+            peserta.waktu = waktuSekarang;
+            saveLocalState();
+            renderAllViews();
+
+            // Tampilkan hasil scan di kartu
+            document.getElementById('resId').innerText = peserta.id;
+            document.getElementById('resNama').innerText = peserta.nama;
+            document.getElementById('resProdi').innerText = `${peserta.prodi} (${peserta.fakultas})`;
+            document.getElementById('resWaktu').innerText = waktuSekarang;
+            document.getElementById('scanResultCard').classList.remove('hidden');
+
+            // Sinkronisasi otomatis ke Google Sheets via POST
+            if (gasUrl) {
+                try {
+                    await fetch(gasUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'scan', id: peserta.id, waktu: waktuSekarang })
+                    });
+                } catch (err) {
+                    console.error("Gagal sinkron scan otomatis:", err);
+                }
+            }
+        }
+
+        // Status Kehadiran & Filter
+        function populateFilterOptions() {
+            const selectFak = document.getElementById('filterFakultas');
+            const fakultasSet = [...new Set(statePeserta.map(p => p.fakultas).filter(Boolean))];
+            let htmlFak = '<option value="">Semua Fakultas</option>';
+            fakultasSet.forEach(f => {
+                htmlFak += `<option value="${f}">${f}</option>`;
+            });
+            selectFak.innerHTML = htmlFak;
+
+            const selectKel = document.getElementById('filterKelompok');
+            const kelompokSet = [...new Set(statePeserta.map(p => p.kelompok).filter(Boolean))];
+            let htmlKel = '<option value="">Semua Kelompok</option>';
+            kelompokSet.forEach(k => {
+                htmlKel += `<option value="${k}">${k}</option>`;
+            });
+            selectKel.innerHTML = htmlKel;
+        }
+
+        function renderStatusTable() {
+            const fFak = document.getElementById('filterFakultas').value;
+            const fKelompok = document.getElementById('filterKelompok').value;
+            const fKel = document.getElementById('filterKelas').value;
+            const fSta = document.getElementById('filterStatus').value;
+
+            let filtered = statePeserta.filter(p => {
+                if (fFak && p.fakultas !== fFak) return false;
+                if (fKelompok && p.kelompok !== fKelompok) return false;
+                if (fKel && p.kelas !== fKel) return false;
+                if (fSta && p.status !== fSta) return false;
+                return true;
+            });
+
+            const tbody = document.getElementById('statusTableBody');
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400">Tidak ada data yang sesuai filter.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(p => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3 font-semibold">${p.id}</td>
+                    <td class="p-3">${p.nama}</td>
+                    <td class="p-3">${p.fakultas} / ${p.prodi}</td>
+                    <td class="p-3">${p.kelompok || '-'}</td>
+                    <td class="p-3">${p.kelas}</td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-[10px] font-bold ${p.status === 'Hadir' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}">${p.status}</span>
+                    </td>
+                    <td class="p-3">${p.waktu || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function filterStatusTable() {
+            renderStatusTable();
+        }
+
+        // Statistik Berdasarkan Kelompok & Chart.js
+        function renderChart() {
+            const total = statePeserta.length;
+            const hadir = statePeserta.filter(p => p.status === 'Hadir').length;
+            const belum = total - hadir;
+
+            document.getElementById('statTotal').innerText = total;
+            document.getElementById('statHadir').innerText = hadir;
+            document.getElementById('statBelum').innerText = belum;
+
+            // Kelompokkan data berdasarkan Kelompok
+            const kelompokMap = {};
+            statePeserta.forEach(p => {
+                const kel = p.kelompok || 'Tanpa Kelompok';
+                if (!kelompokMap[kel]) {
+                    kelompokMap[kel] = { total: 0, hadir: 0 };
+                }
+                kelompokMap[kel].total++;
+                if (p.status === 'Hadir') {
+                    kelompokMap[kel].hadir++;
+                }
+            });
+
+            const labels = Object.keys(kelompokMap);
+            const hadirData = labels.map(k => kelompokMap[k].hadir);
+            const belumData = labels.map(k => kelompokMap[k].total - kelompokMap[k].hadir);
+
+            const ctx = document.getElementById('statChart').getContext('2d');
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Hadir',
+                            data: hadirData,
+                            backgroundColor: '#10B981',
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Belum Hadir',
+                            data: belumData,
+                            backgroundColor: '#F59E0B',
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, beginAtZero: true }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        async function handleScannedId(id) {
+            const peserta = statePeserta.find(p => p.id === String(id));
+            if (!peserta) {
+                // Abaikan atau tampilkan sekilas tanpa blocking pop-up alert yang menghalangi scan berikutnya
+                console.warn(`ID QR Code "${id}" tidak ditemukan dalam database!`);
+                return;
+            }
+
+            if (peserta.status === 'Hadir') {
+                // Jangan tampilkan alert, langsung perbarui tampilan kartu hasil scan terakhir sebagai indikator bahwa peserta sudah tercatat
+                document.getElementById('resId').innerText = peserta.id;
+                document.getElementById('resNama').innerText = `${peserta.nama} (SUDAH ABSEN)`;
+                document.getElementById('resProdi').innerText = `${peserta.prodi} (${peserta.fakultas})`;
+                document.getElementById('resWaktu').innerText = peserta.waktu;
+                document.getElementById('scanResultCard').classList.remove('hidden');
+                return;
+            }
+
+            const waktuSekarang = new Date().toLocaleString();
+            peserta.status = 'Hadir';
+            peserta.waktu = waktuSekarang;
+            saveLocalState();
+            renderAllViews();
+
+            // Tampilkan hasil scan di kartu
+            document.getElementById('resId').innerText = peserta.id;
+            document.getElementById('resNama').innerText = peserta.nama;
+            document.getElementById('resProdi').innerText = `${peserta.prodi} (${peserta.fakultas})`;
+            document.getElementById('resWaktu').innerText = waktuSekarang;
+            document.getElementById('scanResultCard').classList.remove('hidden');
+
+            // Sinkronisasi otomatis ke Google Sheets via POST
+            if (gasUrl) {
+                try {
+                    await fetch(gasUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'scan', id: peserta.id, waktu: waktuSekarang })
+                    });
+                } catch (err) {
+                    console.error("Gagal sinkron scan otomatis:", err);
+                }
+            }
+        }
+
+        function renderStatusTable() {
+            const fFak = document.getElementById('filterFakultas').value;
+            const fKel = document.getElementById('filterKelas').value;
+            const fSta = document.getElementById('filterStatus').value;
+
+            let filtered = statePeserta.filter(p => {
+                if (fFak && p.fakultas !== fFak) return false;
+                if (fKel && p.kelas !== fKel) return false;
+                if (fSta && p.status !== fSta) return false;
+                return true;
+            });
+
+            const tbody = document.getElementById('statusTableBody');
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-gray-400">Tidak ada data yang sesuai filter.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(p => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3 font-semibold">${p.id}</td>
+                    <td class="p-3">${p.nama}</td>
+                    <td class="p-3">${p.fakultas} / ${p.prodi}</td>
+                    <td class="p-3">${p.kelas}</td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-[10px] font-bold ${p.status === 'Hadir' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}">${p.status}</span>
+                    </td>
+                    <td class="p-3">${p.waktu || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function filterStatusTable() {
+            renderStatusTable();
+        }
+
+        // Statistik & Chart.js
+        function renderChart() {
+            const total = statePeserta.length;
+            const hadir = statePeserta.filter(p => p.status === 'Hadir').length;
+            const belum = total - hadir;
+
+            document.getElementById('statTotal').innerText = total;
+            document.getElementById('statHadir').innerText = hadir;
+            document.getElementById('statBelum').innerText = belum;
+
+            const ctx = document.getElementById('statChart').getContext('2d');
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Hadir', 'Belum Hadir'],
+                    datasets: [{
+                        data: [hadir, belum],
+                        backgroundColor: ['#10B981', '#F59E0B'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // Rekap Absen & Export Excel
+        function renderRekapTable() {
+            // Urutkan otomatis berdasarkan ID Peserta
+            let sorted = [...statePeserta].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+            const tbody = document.getElementById('rekapTableBody');
+
+            if (sorted.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-gray-400">Tidak ada data rekap.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = sorted.map(p => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3 font-semibold">${p.id}</td>
+                    <td class="p-3">${p.nama}</td>
+                    <td class="p-3">${p.prodi}</td>
+                    <td class="p-3">${p.fakultas}</td>
+                    <td class="p-3">${p.kelompok}</td>
+                    <td class="p-3">${p.kelas}</td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-[10px] font-bold ${p.status === 'Hadir' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}">${p.status}</span>
+                    </td>
+                    <td class="p-3">${p.waktu || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function downloadExcelRekap() {
+            if (statePeserta.length === 0) {
+                alert('Tidak ada data untuk diexport!');
+                return;
+            }
+
+            let sorted = [...statePeserta].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+            const dataToExport = sorted.map(p => ({
+                "ID": p.id,
+                "Nama Peserta": p.nama,
+                "Prodi": p.prodi,
+                "Fakultas": p.fakultas,
+                "Kelompok": p.kelompok,
+                "Kelas": p.kelas,
+                "Status Absen": p.status,
+                "Waktu Absen": p.waktu
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Absensi");
+            XLSX.writeFile(workbook, "Rekap_Absensi_Peserta.xlsx");
+        }
+    </script>
+</body>
+</html>
