@@ -659,35 +659,21 @@
             html5QrCode = new Html5Qrcode("reader");
             
             html5QrCode.start(
-                function onScanSuccess(decodedText) {
-                    // --- 1. TAMBAHKAN BLOK KODE INI DI PALING ATAS ---
-                    if (isScanPaused) {
-                        return; // Abaikan hasil scan jika masih dalam masa jeda (delay)
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    async (decodedText) => {
+                        await handleScannedId(decodedText);
+                    },
+                    (errorMessage) => {
+                        // Ignore frame scanning errors
                     }
-
-                    // Kunci scanner agar tidak bisa membaca lagi sementara waktu
-                    isScanPaused = true; 
-
-                    // Buka kembali kunci setelah waktu delay (misal: 3 detik) habis
-                    setTimeout(() => {
-                        isScanPaused = false;
-                    }, scanDelay);
-                        { facingMode: "environment" },
-                        { fps: 10, qrbox: { width: 250, height: 250 } },
-                        async (decodedText) => {
-                            await handleScannedId(decodedText);
-                        },
-                        (errorMessage) => {
-                            // Ignore frame scanning errors
-                        }
-                    ).then(() => {
-                        isScanning = true;
-                    }).catch(err => {
-                        console.error(err);
-                        alert('Gagal menyalakan kamera. Pastikan izin kamera diaktifkan.');
-                        document.getElementById('scan-placeholder').classList.remove('hidden');
-                    });
-                }
+                ).then(() => {
+                    isScanning = true;
+                }).catch(err => {
+                    console.error(err);
+                    alert('Gagal menyalakan kamera. Pastikan izin kamera diaktifkan.');
+                    document.getElementById('scan-placeholder').classList.remove('hidden');
+                });
             }
 
         function stopScanner() {
