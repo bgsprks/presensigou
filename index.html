@@ -163,10 +163,6 @@
                         <p class="text-xs text-gray-500 mt-1">Upload data Excel lokal atau kelola QR Code peserta.</p>
                     </div>
                     <div class="flex flex-wrap gap-2 w-full sm:w-auto">
-                        <div class="relative w-full sm:w-auto mb-2 sm:mb-0">
-                            <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
-                            <input type="text" id="searchPeserta" oninput="renderPesertaTable()" placeholder="Cari nama atau ID..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:outline-none shadow-sm">
-                        </div>
                         <label class="bg-warning hover:bg-amber-600 text-gray-900 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-bezier cursor-pointer shadow flex items-center space-x-2">
                             <i class="fa-solid fa-file-excel"></i>
                             <span>Upload Excel</span>
@@ -180,6 +176,10 @@
                             <i class="fa-solid fa-trash"></i>
                             <span>Reset Database</span>
                         </button>
+                        <div class="relative w-full sm:w-auto mb-2 sm:mb-0">
+                            <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                            <input type="text" id="searchPeserta" oninput="renderPesertaTable()" placeholder="Cari nama atau ID..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:outline-none shadow-sm">
+                        </div>
                     </div>
                 </div>
 
